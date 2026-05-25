@@ -5,6 +5,76 @@ Multi-tenant SaaS architecture with role-based access control, real-time stock t
 
 ---
 
+## 🗄️ Database Entity Relationship Diagram (ERD)
+
+![Database ERD](./assets/db%20diagram.png)
+
+### Database Overview
+
+CrackPOS menggunakan **multi-tenant architecture** dengan **row-level isolation**. Setiap tabel memiliki kolom `tenantId` untuk memisahkan data antar toko secara otomatis.
+
+**16 Tables Total:**
+
+**Platform Level (2 tables):**
+- `platform_admins` - Super admin untuk mengelola seluruh platform
+- `platform_users` - User global yang bisa memiliki/bergabung dengan multiple tenants
+
+**Tenant & Multi-Tenancy (4 tables):**
+- `tenants` - Data toko (store), root entity untuk isolasi multi-tenant
+- `tenant_members` - Relasi many-to-many antara PlatformUser dan Tenant
+- `tenant_users` - User dalam toko (kasir, admin toko) dengan username/password
+- `refresh_tokens` - Token refresh JWT untuk session management
+
+**Catalog (3 tables):**
+- `categories` - Kategori produk (Makanan, Minuman, dll)
+- `suppliers` - Data pemasok/supplier
+- `products` - Produk dengan SKU, harga, stok, gambar
+
+**Inventory (1 table):**
+- `stock_transactions` - Ledger transaksi stok (IN/OUT/ADJUSTMENT/RETURN)
+
+**Sales (4 tables):**
+- `sales_orders` - Order penjualan dengan tracking profit & COGS
+- `order_items` - Item dalam order penjualan
+- `sales_returns` - Retur penjualan
+- `sales_return_items` - Item dalam retur
+
+**Purchase (2 tables):**
+- `purchase_orders` - Order pembelian dari supplier
+- `purchase_order_items` - Item dalam order pembelian
+
+**Audit (1 table):**
+- `activity_logs` - Audit trail untuk semua operasi (CREATE/UPDATE/DELETE/LOGIN/LOGOUT)
+
+### Key Relationships
+
+```
+tenants (1) ──< (N) tenant_users ──< (N) refresh_tokens
+tenants (1) ──< (N) products ──> (1) categories
+tenants (1) ──< (N) products ──> (1) suppliers
+tenants (1) ──< (N) sales_orders ──< (N) order_items ──> (1) products
+tenants (1) ──< (N) purchase_orders ──< (N) purchase_order_items ──> (1) products
+tenants (1) ──< (N) sales_returns ──< (N) sales_return_items ──> (1) order_items
+tenants (1) ──< (N) stock_transactions ──> (1) products
+tenants (1) ──< (N) activity_logs
+```
+
+**Dokumentasi lengkap ERD** tersedia di [ARCHITECTURE.md](./ARCHITECTURE.md) dengan format Mermaid dan DBDiagram.io yang siap copy-paste.
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 🧪 Test Coverage
 
 ![Statements](https://img.shields.io/badge/statements-40.85%25-orange.svg?style=flat)
