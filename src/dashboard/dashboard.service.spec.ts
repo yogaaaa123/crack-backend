@@ -93,7 +93,10 @@ describe('DashboardService', () => {
       const result = await service.getSalesTrend('t-1', 30);
       expect(result).toHaveLength(1);
       expect(result[0].order_count).toBe(5);
-      expect(result[0].revenue.toString()).toBe('500');
+      // Service maps and converts to totalRevenue
+      expect(result[0].totalRevenue).toBe(500);
+      expect(result[0].totalProfit).toBe(100);
+      expect(result[0].totalSales).toBe(5);
     });
   });
 
