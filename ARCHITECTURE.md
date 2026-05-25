@@ -234,241 +234,221 @@ erDiagram
 
 Gunakan format di bawah ini untuk membuat ERD di [dbdiagram.io](https://dbdiagram.io):
 
-```sql
-// Platform Level
+```
 Table platform_admins {
-  id string [pk]
-  email string [unique, not null]
-  name string
-  passwordHash string [not null]
-  createdAt timestamp [default: `now()`]
+  id varchar [pk]
+  email varchar [unique]
+  name varchar
+  passwordHash varchar
+  createdAt timestamp
   deletedAt timestamp
 }
 
 Table platform_users {
-  id string [pk]
-  email string [unique, not null]
-  name string
-  googleId string [unique]
-  passwordHash string
-  createdAt timestamp [default: `now()`]
+  id varchar [pk]
+  email varchar [unique]
+  name varchar
+  googleId varchar [unique]
+  passwordHash varchar
+  createdAt timestamp
   deletedAt timestamp
 }
 
-// Tenant & Multi-Tenancy
 Table tenants {
-  id string [pk]
-  name string [unique, not null]
-  slug string [unique, not null]
-  aiApiKey string
-  aiTokens int [default: 0]
-  aiTokensUsed int [default: 0]
-  createdAt timestamp [default: `now()`]
+  id varchar [pk]
+  name varchar [unique]
+  slug varchar [unique]
+  aiApiKey varchar
+  aiTokens integer
+  aiTokensUsed integer
+  createdAt timestamp
   deletedAt timestamp
 }
 
 Table tenant_members {
-  id string [pk]
-  platformUserId string [not null]
-  tenantId string [not null]
-  role string [default: 'OWNER']
-  createdAt timestamp [default: `now()`]
+  id varchar [pk]
+  platformUserId varchar
+  tenantId varchar
+  role varchar
+  createdAt timestamp
 }
 
-Ref: tenant_members.platformUserId > platform_users.id
-Ref: tenant_members.tenantId > tenants.id
-
 Table tenant_users {
-  id string [pk]
-  tenantId string [not null]
-  username string [not null]
-  passwordHash string [not null]
-  role string [default: 'STAFF']
-  displayName string
-  email string
-  failedLoginAttempts int [default: 0]
+  id varchar [pk]
+  tenantId varchar
+  username varchar
+  passwordHash varchar
+  role varchar
+  displayName varchar
+  email varchar
+  failedLoginAttempts integer
   lockedUntil timestamp
-  createdAt timestamp [default: `now()`]
+  createdAt timestamp
   deletedAt timestamp
 }
 
-Ref: tenant_users.tenantId > tenants.id
-
 Table refresh_tokens {
-  id string [pk]
-  token string [unique, not null]
-  userId string [not null]
-  expiresAt timestamp [not null]
-  createdAt timestamp [default: `now()`]
+  id varchar [pk]
+  token varchar [unique]
+  userId varchar
+  expiresAt timestamp
+  createdAt timestamp
   revokedAt timestamp
 }
 
-Ref: refresh_tokens.userId > tenant_users.id
-
-// Catalog
 Table categories {
-  id string [pk]
-  tenantId string [not null]
-  name string [not null]
+  id varchar [pk]
+  tenantId varchar
+  name varchar
   description text
   deletedAt timestamp
 }
 
-Ref: categories.tenantId > tenants.id
-
 Table suppliers {
-  id string [pk]
-  tenantId string [not null]
-  name string [not null]
-  contactName string
-  phone string
-  email string
+  id varchar [pk]
+  tenantId varchar
+  name varchar
+  contactName varchar
+  phone varchar
+  email varchar
   address text
   deletedAt timestamp
 }
 
-Ref: suppliers.tenantId > tenants.id
-
 Table products {
-  id string [pk]
-  tenantId string [not null]
-  categoryId string
-  supplierId string
-  sku string [not null]
-  name string [not null]
+  id varchar [pk]
+  tenantId varchar
+  categoryId varchar
+  supplierId varchar
+  sku varchar
+  name varchar
   description text
-  imageUrl string
-  price decimal(12,2) [not null]
-  averageCost decimal(12,2) [default: 0]
-  stockQuantity int [default: 0]
-  reorderLevel int [default: 10]
-  createdAt timestamp [default: `now()`]
+  imageUrl varchar
+  price decimal
+  averageCost decimal
+  stockQuantity integer
+  reorderLevel integer
+  createdAt timestamp
   updatedAt timestamp
   deletedAt timestamp
 }
 
-Ref: products.tenantId > tenants.id
-Ref: products.categoryId > categories.id
-Ref: products.supplierId > suppliers.id
-
-// Inventory
 Table stock_transactions {
-  id string [pk]
-  tenantId string [not null]
-  productId string [not null]
-  userId string [not null]
-  type string [not null]
-  quantity int [not null]
-  referenceId string
+  id varchar [pk]
+  tenantId varchar
+  productId varchar
+  userId varchar
+  type varchar
+  quantity integer
+  referenceId varchar
   notes text
-  createdAt timestamp [default: `now()`]
+  createdAt timestamp
 }
 
-Ref: stock_transactions.tenantId > tenants.id
-Ref: stock_transactions.productId > products.id
-Ref: stock_transactions.userId > tenant_users.id
-
-// Sales
 Table sales_orders {
-  id string [pk]
-  tenantId string [not null]
-  userId string [not null]
-  orderNumber string [not null]
-  customerId string
-  totalPrice decimal(12,2) [not null]
-  totalCogs decimal(12,2) [default: 0]
-  totalProfit decimal(12,2) [default: 0]
-  status string [default: 'PENDING']
-  createdAt timestamp [default: `now()`]
+  id varchar [pk]
+  tenantId varchar
+  userId varchar
+  orderNumber varchar
+  customerId varchar
+  totalPrice decimal
+  totalCogs decimal
+  totalProfit decimal
+  status varchar
+  createdAt timestamp
   deletedAt timestamp
 }
 
-Ref: sales_orders.tenantId > tenants.id
-Ref: sales_orders.userId > tenant_users.id
-
 Table order_items {
-  id string [pk]
-  orderId string [not null]
-  productId string [not null]
-  quantity int [not null]
-  returnedQuantity int [default: 0]
-  unitPrice decimal(12,2) [not null]
-  cogs decimal(12,2) [default: 0]
-  profitMargin decimal(12,2) [default: 0]
+  id varchar [pk]
+  orderId varchar
+  productId varchar
+  quantity integer
+  returnedQuantity integer
+  unitPrice decimal
+  cogs decimal
+  profitMargin decimal
 }
-
-Ref: order_items.orderId > sales_orders.id
-Ref: order_items.productId > products.id
 
 Table sales_returns {
-  id string [pk]
-  tenantId string [not null]
-  salesOrderId string [not null]
-  userId string [not null]
-  returnNumber string [not null]
+  id varchar [pk]
+  tenantId varchar
+  salesOrderId varchar
+  userId varchar
+  returnNumber varchar
   reason text
-  totalRefund decimal(12,2) [default: 0]
-  status string [default: 'PENDING']
-  createdAt timestamp [default: `now()`]
+  totalRefund decimal
+  status varchar
+  createdAt timestamp
 }
-
-Ref: sales_returns.tenantId > tenants.id
-Ref: sales_returns.salesOrderId > sales_orders.id
-Ref: sales_returns.userId > tenant_users.id
 
 Table sales_return_items {
-  id string [pk]
-  returnId string [not null]
-  orderItemId string [not null]
-  quantity int [not null]
-  refundAmount decimal(12,2) [not null]
+  id varchar [pk]
+  returnId varchar
+  orderItemId varchar
+  quantity integer
+  refundAmount decimal
 }
 
-Ref: sales_return_items.returnId > sales_returns.id
-Ref: sales_return_items.orderItemId > order_items.id
-
-// Purchase
 Table purchase_orders {
-  id string [pk]
-  tenantId string [not null]
-  supplierId string [not null]
-  userId string [not null]
-  orderNumber string [not null]
-  totalPrice decimal(12,2) [not null]
-  status string [default: 'PENDING']
+  id varchar [pk]
+  tenantId varchar
+  supplierId varchar
+  userId varchar
+  orderNumber varchar
+  totalPrice decimal
+  status varchar
   notes text
-  createdAt timestamp [default: `now()`]
+  createdAt timestamp
   receivedAt timestamp
   deletedAt timestamp
 }
 
+Table purchase_order_items {
+  id varchar [pk]
+  orderId varchar
+  productId varchar
+  quantity integer
+  unitPrice decimal
+}
+
+Table activity_logs {
+  id varchar [pk]
+  tenantId varchar
+  userId varchar
+  action varchar
+  entity varchar
+  entityId varchar
+  metadata json
+  createdAt timestamp
+}
+
+Ref: tenant_members.platformUserId > platform_users.id
+Ref: tenant_members.tenantId > tenants.id
+Ref: tenant_users.tenantId > tenants.id
+Ref: refresh_tokens.userId > tenant_users.id
+Ref: categories.tenantId > tenants.id
+Ref: suppliers.tenantId > tenants.id
+Ref: products.tenantId > tenants.id
+Ref: products.categoryId > categories.id
+Ref: products.supplierId > suppliers.id
+Ref: stock_transactions.tenantId > tenants.id
+Ref: stock_transactions.productId > products.id
+Ref: stock_transactions.userId > tenant_users.id
+Ref: sales_orders.tenantId > tenants.id
+Ref: sales_orders.userId > tenant_users.id
+Ref: order_items.orderId > sales_orders.id
+Ref: order_items.productId > products.id
+Ref: sales_returns.tenantId > tenants.id
+Ref: sales_returns.salesOrderId > sales_orders.id
+Ref: sales_returns.userId > tenant_users.id
+Ref: sales_return_items.returnId > sales_returns.id
+Ref: sales_return_items.orderItemId > order_items.id
 Ref: purchase_orders.tenantId > tenants.id
 Ref: purchase_orders.supplierId > suppliers.id
 Ref: purchase_orders.userId > tenant_users.id
-
-Table purchase_order_items {
-  id string [pk]
-  orderId string [not null]
-  productId string [not null]
-  quantity int [not null]
-  unitPrice decimal(12,2) [not null]
-}
-
 Ref: purchase_order_items.orderId > purchase_orders.id
 Ref: purchase_order_items.productId > products.id
-
-// Audit
-Table activity_logs {
-  id string [pk]
-  tenantId string [not null]
-  userId string [not null]
-  action string [not null]
-  entity string [not null]
-  entityId string
-  metadata json
-  createdAt timestamp [default: `now()`]
-}
-
 Ref: activity_logs.tenantId > tenants.id
 Ref: activity_logs.userId > tenant_users.id
 ```
