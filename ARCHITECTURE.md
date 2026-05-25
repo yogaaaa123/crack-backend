@@ -4,6 +4,8 @@
 
 ## 1. Entity Relationship Diagram (ERD) — Lengkap
 
+### Mermaid Format (Visual)
+
 ```mermaid
 erDiagram
     PlatformAdmin {
@@ -226,6 +228,273 @@ erDiagram
     OrderItem ||--o{ SalesReturnItem : "reversed by"
 
     PurchaseOrder ||--o{ PurchaseOrderItem : "contains"
+```
+
+### DBDiagram.io Format (Copy-Paste Ready)
+
+Gunakan format di bawah ini untuk membuat ERD di [dbdiagram.io](https://dbdiagram.io):
+
+```sql
+// Platform Level
+Table platform_admins {
+  id string [pk]
+  email string [unique, not null]
+  name string
+  passwordHash string [not null]
+  createdAt datetime [default: `now()`]
+  deletedAt datetime
+}
+
+Table platform_users {
+  id string [pk]
+  email string [unique, not null]
+  name string
+  googleId string [unique]
+  passwordHash string
+  createdAt datetime [default: `now()`]
+  deletedAt datetime
+}
+
+// Tenant & Multi-Tenancy
+Table tenants {
+  id string [pk]
+  name string [unique, not null]
+  slug string [unique, not null]
+  aiApiKey string
+  aiTokens int [default: 0]
+  aiTokensUsed int [default: 0]
+  createdAt datetime [default: `now()`]
+  deletedAt datetime
+}
+
+Table tenant_members {
+  id string [pk]
+  platformUserId string [not null, ref: > platform_users.id]
+  tenantId string [not null, ref: > tenants.id]
+  role string [default: 'OWNER']
+  createdAt datetime [default: `now()`]
+  
+  indexes {
+    (platformUserId, tenantId) [unique]
+  }
+}
+
+Table tenant_users {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  username string [not null]
+  passwordHash string [not null]
+  role string [default: 'STAFF', note: 'ADMIN, STAFF']
+  displayName string
+  email string
+  failedLoginAttempts int [default: 0]
+  lockedUntil datetime
+  createdAt datetime [default: `now()`]
+  deletedAt datetime
+  
+  indexes {
+    (tenantId, username) [unique]
+    (username, deletedAt)
+    (email, deletedAt)
+    (tenantId, role)
+  }
+}
+
+Table refresh_tokens {
+  id string [pk]
+  token string [unique, not null]
+  userId string [not null, ref: > tenant_users.id]
+  expiresAt datetime [not null]
+  createdAt datetime [default: `now()`]
+  revokedAt datetime
+  
+  indexes {
+    (token)
+    (userId)
+  }
+}
+
+// Catalog
+Table categories {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  name string [not null]
+  description text
+  deletedAt datetime
+  
+  indexes {
+    (tenantId, name) [unique]
+  }
+}
+
+Table suppliers {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  name string [not null]
+  contactName string
+  phone string
+  email string
+  address text
+  deletedAt datetime
+  
+  indexes {
+    (tenantId, name) [unique]
+  }
+}
+
+Table products {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  categoryId string [ref: > categories.id]
+  supplierId string [ref: > suppliers.id]
+  sku string [not null]
+  name string [not null]
+  description text
+  imageUrl string
+  price decimal [not null]
+  averageCost decimal [default: 0]
+  stockQuantity int [default: 0]
+  reorderLevel int [default: 10]
+  createdAt datetime [default: `now()`]
+  updatedAt datetime
+  deletedAt datetime
+  
+  indexes {
+    (tenantId, sku) [unique]
+    (sku)
+    (name)
+    (stockQuantity, reorderLevel, tenantId)
+  }
+}
+
+// Inventory
+Table stock_transactions {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  productId string [not null, ref: > products.id]
+  userId string [not null, ref: > tenant_users.id]
+  type string [not null, note: 'IN, OUT, ADJUSTMENT, RETURN']
+  quantity int [not null]
+  referenceId string
+  notes text
+  createdAt datetime [default: `now()`]
+  
+  indexes {
+    (createdAt)
+    (productId)
+  }
+}
+
+// Sales
+Table sales_orders {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  userId string [not null, ref: > tenant_users.id]
+  orderNumber string [not null]
+  customerId string
+  totalPrice decimal [not null]
+  totalCogs decimal [default: 0]
+  totalProfit decimal [default: 0]
+  status string [default: 'PENDING', note: 'PENDING, COMPLETED, CANCELLED']
+  createdAt datetime [default: `now()`]
+  deletedAt datetime
+  
+  indexes {
+    (tenantId, orderNumber) [unique]
+    (orderNumber)
+    (createdAt)
+    (userId)
+    (customerId)
+  }
+}
+
+Table order_items {
+  id string [pk]
+  orderId string [not null, ref: > sales_orders.id]
+  productId string [not null, ref: > products.id]
+  quantity int [not null]
+  returnedQuantity int [default: 0]
+  unitPrice decimal [not null]
+  cogs decimal [default: 0]
+  profitMargin decimal [default: 0]
+}
+
+Table sales_returns {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  salesOrderId string [not null, ref: > sales_orders.id]
+  userId string [not null, ref: > tenant_users.id]
+  returnNumber string [not null]
+  reason text
+  totalRefund decimal [default: 0]
+  status string [default: 'PENDING', note: 'PENDING, COMPLETED, REJECTED']
+  createdAt datetime [default: `now()`]
+  
+  indexes {
+    (tenantId, returnNumber) [unique]
+    (returnNumber)
+    (salesOrderId)
+  }
+}
+
+Table sales_return_items {
+  id string [pk]
+  returnId string [not null, ref: > sales_returns.id]
+  orderItemId string [not null, ref: > order_items.id]
+  quantity int [not null]
+  refundAmount decimal [not null]
+}
+
+// Purchase
+Table purchase_orders {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  supplierId string [not null, ref: > suppliers.id]
+  userId string [not null, ref: > tenant_users.id]
+  orderNumber string [not null]
+  totalPrice decimal [not null]
+  status string [default: 'PENDING', note: 'PENDING, RECEIVED, CANCELLED']
+  notes text
+  createdAt datetime [default: `now()`]
+  receivedAt datetime
+  deletedAt datetime
+  
+  indexes {
+    (tenantId, orderNumber) [unique]
+    (orderNumber)
+    (createdAt)
+    (supplierId)
+    (userId)
+    (tenantId, createdAt)
+  }
+}
+
+Table purchase_order_items {
+  id string [pk]
+  orderId string [not null, ref: > purchase_orders.id]
+  productId string [not null, ref: > products.id]
+  quantity int [not null]
+  unitPrice decimal [not null]
+}
+
+// Audit
+Table activity_logs {
+  id string [pk]
+  tenantId string [not null, ref: > tenants.id]
+  userId string [not null, ref: > tenant_users.id]
+  action string [not null, note: 'CREATE, UPDATE, DELETE, LOGIN, LOGOUT']
+  entity string [not null]
+  entityId string
+  metadata json
+  createdAt datetime [default: `now()`]
+  
+  indexes {
+    (userId)
+    (entity)
+    (createdAt)
+    (tenantId, entity, createdAt)
+  }
+}
 ```
 
 ---
