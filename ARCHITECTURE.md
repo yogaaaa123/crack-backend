@@ -241,8 +241,8 @@ Table platform_admins {
   email string [unique, not null]
   name string
   passwordHash string [not null]
-  createdAt datetime [default: `now()`]
-  deletedAt datetime
+  createdAt timestamp [default: `now()`]
+  deletedAt timestamp
 }
 
 Table platform_users {
@@ -251,8 +251,8 @@ Table platform_users {
   name string
   googleId string [unique]
   passwordHash string
-  createdAt datetime [default: `now()`]
-  deletedAt datetime
+  createdAt timestamp [default: `now()`]
+  deletedAt timestamp
 }
 
 // Tenant & Multi-Tenancy
@@ -263,238 +263,214 @@ Table tenants {
   aiApiKey string
   aiTokens int [default: 0]
   aiTokensUsed int [default: 0]
-  createdAt datetime [default: `now()`]
-  deletedAt datetime
+  createdAt timestamp [default: `now()`]
+  deletedAt timestamp
 }
 
 Table tenant_members {
   id string [pk]
-  platformUserId string [not null, ref: > platform_users.id]
-  tenantId string [not null, ref: > tenants.id]
+  platformUserId string [not null]
+  tenantId string [not null]
   role string [default: 'OWNER']
-  createdAt datetime [default: `now()`]
-  
-  indexes {
-    (platformUserId, tenantId) [unique]
-  }
+  createdAt timestamp [default: `now()`]
 }
+
+Ref: tenant_members.platformUserId > platform_users.id
+Ref: tenant_members.tenantId > tenants.id
 
 Table tenant_users {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
+  tenantId string [not null]
   username string [not null]
   passwordHash string [not null]
-  role string [default: 'STAFF', note: 'ADMIN, STAFF']
+  role string [default: 'STAFF']
   displayName string
   email string
   failedLoginAttempts int [default: 0]
-  lockedUntil datetime
-  createdAt datetime [default: `now()`]
-  deletedAt datetime
-  
-  indexes {
-    (tenantId, username) [unique]
-    (username, deletedAt)
-    (email, deletedAt)
-    (tenantId, role)
-  }
+  lockedUntil timestamp
+  createdAt timestamp [default: `now()`]
+  deletedAt timestamp
 }
+
+Ref: tenant_users.tenantId > tenants.id
 
 Table refresh_tokens {
   id string [pk]
   token string [unique, not null]
-  userId string [not null, ref: > tenant_users.id]
-  expiresAt datetime [not null]
-  createdAt datetime [default: `now()`]
-  revokedAt datetime
-  
-  indexes {
-    (token)
-    (userId)
-  }
+  userId string [not null]
+  expiresAt timestamp [not null]
+  createdAt timestamp [default: `now()`]
+  revokedAt timestamp
 }
+
+Ref: refresh_tokens.userId > tenant_users.id
 
 // Catalog
 Table categories {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
+  tenantId string [not null]
   name string [not null]
   description text
-  deletedAt datetime
-  
-  indexes {
-    (tenantId, name) [unique]
-  }
+  deletedAt timestamp
 }
+
+Ref: categories.tenantId > tenants.id
 
 Table suppliers {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
+  tenantId string [not null]
   name string [not null]
   contactName string
   phone string
   email string
   address text
-  deletedAt datetime
-  
-  indexes {
-    (tenantId, name) [unique]
-  }
+  deletedAt timestamp
 }
+
+Ref: suppliers.tenantId > tenants.id
 
 Table products {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
-  categoryId string [ref: > categories.id]
-  supplierId string [ref: > suppliers.id]
+  tenantId string [not null]
+  categoryId string
+  supplierId string
   sku string [not null]
   name string [not null]
   description text
   imageUrl string
-  price decimal [not null]
-  averageCost decimal [default: 0]
+  price decimal(12,2) [not null]
+  averageCost decimal(12,2) [default: 0]
   stockQuantity int [default: 0]
   reorderLevel int [default: 10]
-  createdAt datetime [default: `now()`]
-  updatedAt datetime
-  deletedAt datetime
-  
-  indexes {
-    (tenantId, sku) [unique]
-    (sku)
-    (name)
-    (stockQuantity, reorderLevel, tenantId)
-  }
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+  deletedAt timestamp
 }
+
+Ref: products.tenantId > tenants.id
+Ref: products.categoryId > categories.id
+Ref: products.supplierId > suppliers.id
 
 // Inventory
 Table stock_transactions {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
-  productId string [not null, ref: > products.id]
-  userId string [not null, ref: > tenant_users.id]
-  type string [not null, note: 'IN, OUT, ADJUSTMENT, RETURN']
+  tenantId string [not null]
+  productId string [not null]
+  userId string [not null]
+  type string [not null]
   quantity int [not null]
   referenceId string
   notes text
-  createdAt datetime [default: `now()`]
-  
-  indexes {
-    (createdAt)
-    (productId)
-  }
+  createdAt timestamp [default: `now()`]
 }
+
+Ref: stock_transactions.tenantId > tenants.id
+Ref: stock_transactions.productId > products.id
+Ref: stock_transactions.userId > tenant_users.id
 
 // Sales
 Table sales_orders {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
-  userId string [not null, ref: > tenant_users.id]
+  tenantId string [not null]
+  userId string [not null]
   orderNumber string [not null]
   customerId string
-  totalPrice decimal [not null]
-  totalCogs decimal [default: 0]
-  totalProfit decimal [default: 0]
-  status string [default: 'PENDING', note: 'PENDING, COMPLETED, CANCELLED']
-  createdAt datetime [default: `now()`]
-  deletedAt datetime
-  
-  indexes {
-    (tenantId, orderNumber) [unique]
-    (orderNumber)
-    (createdAt)
-    (userId)
-    (customerId)
-  }
+  totalPrice decimal(12,2) [not null]
+  totalCogs decimal(12,2) [default: 0]
+  totalProfit decimal(12,2) [default: 0]
+  status string [default: 'PENDING']
+  createdAt timestamp [default: `now()`]
+  deletedAt timestamp
 }
+
+Ref: sales_orders.tenantId > tenants.id
+Ref: sales_orders.userId > tenant_users.id
 
 Table order_items {
   id string [pk]
-  orderId string [not null, ref: > sales_orders.id]
-  productId string [not null, ref: > products.id]
+  orderId string [not null]
+  productId string [not null]
   quantity int [not null]
   returnedQuantity int [default: 0]
-  unitPrice decimal [not null]
-  cogs decimal [default: 0]
-  profitMargin decimal [default: 0]
+  unitPrice decimal(12,2) [not null]
+  cogs decimal(12,2) [default: 0]
+  profitMargin decimal(12,2) [default: 0]
 }
+
+Ref: order_items.orderId > sales_orders.id
+Ref: order_items.productId > products.id
 
 Table sales_returns {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
-  salesOrderId string [not null, ref: > sales_orders.id]
-  userId string [not null, ref: > tenant_users.id]
+  tenantId string [not null]
+  salesOrderId string [not null]
+  userId string [not null]
   returnNumber string [not null]
   reason text
-  totalRefund decimal [default: 0]
-  status string [default: 'PENDING', note: 'PENDING, COMPLETED, REJECTED']
-  createdAt datetime [default: `now()`]
-  
-  indexes {
-    (tenantId, returnNumber) [unique]
-    (returnNumber)
-    (salesOrderId)
-  }
+  totalRefund decimal(12,2) [default: 0]
+  status string [default: 'PENDING']
+  createdAt timestamp [default: `now()`]
 }
+
+Ref: sales_returns.tenantId > tenants.id
+Ref: sales_returns.salesOrderId > sales_orders.id
+Ref: sales_returns.userId > tenant_users.id
 
 Table sales_return_items {
   id string [pk]
-  returnId string [not null, ref: > sales_returns.id]
-  orderItemId string [not null, ref: > order_items.id]
+  returnId string [not null]
+  orderItemId string [not null]
   quantity int [not null]
-  refundAmount decimal [not null]
+  refundAmount decimal(12,2) [not null]
 }
+
+Ref: sales_return_items.returnId > sales_returns.id
+Ref: sales_return_items.orderItemId > order_items.id
 
 // Purchase
 Table purchase_orders {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
-  supplierId string [not null, ref: > suppliers.id]
-  userId string [not null, ref: > tenant_users.id]
+  tenantId string [not null]
+  supplierId string [not null]
+  userId string [not null]
   orderNumber string [not null]
-  totalPrice decimal [not null]
-  status string [default: 'PENDING', note: 'PENDING, RECEIVED, CANCELLED']
+  totalPrice decimal(12,2) [not null]
+  status string [default: 'PENDING']
   notes text
-  createdAt datetime [default: `now()`]
-  receivedAt datetime
-  deletedAt datetime
-  
-  indexes {
-    (tenantId, orderNumber) [unique]
-    (orderNumber)
-    (createdAt)
-    (supplierId)
-    (userId)
-    (tenantId, createdAt)
-  }
+  createdAt timestamp [default: `now()`]
+  receivedAt timestamp
+  deletedAt timestamp
 }
+
+Ref: purchase_orders.tenantId > tenants.id
+Ref: purchase_orders.supplierId > suppliers.id
+Ref: purchase_orders.userId > tenant_users.id
 
 Table purchase_order_items {
   id string [pk]
-  orderId string [not null, ref: > purchase_orders.id]
-  productId string [not null, ref: > products.id]
+  orderId string [not null]
+  productId string [not null]
   quantity int [not null]
-  unitPrice decimal [not null]
+  unitPrice decimal(12,2) [not null]
 }
+
+Ref: purchase_order_items.orderId > purchase_orders.id
+Ref: purchase_order_items.productId > products.id
 
 // Audit
 Table activity_logs {
   id string [pk]
-  tenantId string [not null, ref: > tenants.id]
-  userId string [not null, ref: > tenant_users.id]
-  action string [not null, note: 'CREATE, UPDATE, DELETE, LOGIN, LOGOUT']
+  tenantId string [not null]
+  userId string [not null]
+  action string [not null]
   entity string [not null]
   entityId string
   metadata json
-  createdAt datetime [default: `now()`]
-  
-  indexes {
-    (userId)
-    (entity)
-    (createdAt)
-    (tenantId, entity, createdAt)
-  }
+  createdAt timestamp [default: `now()`]
 }
+
+Ref: activity_logs.tenantId > tenants.id
+Ref: activity_logs.userId > tenant_users.id
 ```
 
 ---
