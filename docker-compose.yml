@@ -28,6 +28,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       AI_INTERNAL_API_KEY: ${AI_INTERNAL_API_KEY}
       AI_SERVICE_URL: 'http://ai:8001'
+      SWAGGER_USER: ${SWAGGER_USER}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD}
       ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:3001'
     depends_on:
       db:
@@ -47,6 +49,8 @@ services:
       DATABASE_URL: 'postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/inventory_db'
       JWT_SECRET: ${JWT_SECRET}
       LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      LLM_MODELS: ${LLM_MODELS:-}
       INTERNAL_API_KEY: ${AI_INTERNAL_API_KEY}
       BACKEND_URL: 'http://backend:8080'
       BACKEND_INTERNAL_API_KEY: ${AI_INTERNAL_API_KEY}
