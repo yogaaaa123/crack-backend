@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { SwaggerBasicAuthMiddleware } from './common/middleware/swagger-basic-auth.middleware';
 import { PrismaClientExceptionFilter } from './common/filters/prisma-client-exception.filter';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -33,9 +34,9 @@ async function bootstrap() {
   ];
 
   let hasError = false;
-  for (const v of requiredVars) {
-    if (!v.value || v.weakDefaults.includes(v.value)) {
-      logger.error(`❌ ${v.name} environment variable is not set or using an unsafe default!`);
+  for (const envVar of requiredVars) {
+    if (!envVar.value || envVar.weakDefaults.includes(envVar.value)) {
+      logger.error(`❌ ${envVar.name} environment variable is not set or using an unsafe default!`);
       hasError = true;
     }
   }
@@ -195,6 +196,14 @@ Semua response menggunakan format:
     )
     .build();
   const document = SwaggerModule.createDocument(app, config);
+
+  // Protect Swagger UI (/api) and OpenAPI spec (/api-json) with Basic Auth.
+  // Credentials come from SWAGGER_USER / SWAGGER_PASSWORD env vars.
+  // If unset, middleware fails closed → docs return 404 instead of staying public.
+  const swaggerAuth = new SwaggerBasicAuthMiddleware();
+  app.use('/api', swaggerAuth.use.bind(swaggerAuth));
+  app.use('/api-json', swaggerAuth.use.bind(swaggerAuth));
+
   SwaggerModule.setup('api', app, document, {
     customCss: `
       .swagger-ui .topbar { background: #1a3a2a; padding: 14px 20px; display: block !important; }
