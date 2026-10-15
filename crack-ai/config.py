@@ -4,7 +4,7 @@ All configuration comes from environment variables.
 No hardcoded defaults for secrets — they MUST be set in environment.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -19,8 +19,12 @@ class Settings(BaseSettings):
     internal_api_key: str
 
     llm_api_key: str
-    llm_base_url: str = "https://api.deepseek.com"
-    llm_model: str = "deepseek-chat"
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_model: str = "nvidia/nemotron-3.5-lightning:free"
+    # Comma-separated rotation pool. Empty = use built-in free tool-capable list.
+    llm_models: str = ""
+    # Max models to try per request before giving up
+    llm_max_attempts: int = 4
 
     backend_url: str = "http://localhost:8000"
     backend_internal_api_key: str = ""
@@ -62,9 +66,19 @@ class Settings(BaseSettings):
         if not v:
             raise ValueError(
                 "LLM_API_KEY is required! Set your API key in .env. "
-                "For DeepSeek, get one at: https://platform.deepseek.com/api_keys"
+                "For OpenRouter, get one at: https://openrouter.ai/keys"
             )
         return v
+
+    @model_validator(mode="after")
+    def validate_llm_key_matches_provider(self) -> "Settings":
+        """Sanity-check: OpenRouter keys (sk-or-...) must use OpenRouter base URL."""
+        if self.llm_api_key.startswith("sk-or-") and "openrouter.ai" not in self.llm_base_url:
+            raise ValueError(
+                f"LLM_API_KEY is an OpenRouter key (sk-or-...) but LLM_BASE_URL is "
+                f"'{self.llm_base_url}'. Set LLM_BASE_URL=https://openrouter.ai/api/v1"
+            )
+        return self
 
 settings = Settings()
 

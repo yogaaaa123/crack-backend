@@ -36,6 +36,7 @@ from config import settings
 from database import close_db, init_db
 from backend_client import close_backend_client
 from logging_config import get_logger, setup_logging
+from model_rotation import rotation
 from schemas import ChatRequest, ChatResponse, ProductFromImageResponse, ProductImageItem
 import ai_service
 from ai_service import client
@@ -88,7 +89,7 @@ def _validate_startup_security() -> None:
     if not settings.llm_api_key:
         errors.append(
             "SECURITY: LLM_API_KEY is not set! "
-            "Get a DeepSeek API key at: https://platform.deepseek.com/api_keys"
+            "Get an OpenRouter API key at: https://openrouter.ai/keys"
         )
 
     if errors:
@@ -180,6 +181,7 @@ async def health_check():
         - database: "connected" if PostgreSQL responds to SELECT 1
         - service: service identifier
         - response_time_ms: time taken to ping the database
+        - llm_pool: model rotation status (available models, cooldowns)
     """
     db_status = "unknown"
     start = time.time()
@@ -196,13 +198,22 @@ async def health_check():
 
     elapsed_ms = round((time.time() - start) * 1000, 1)
 
-    is_healthy = db_status == "connected"
+    pool_status = rotation.status()
+    available_count = sum(1 for m in pool_status if m["available"])
+
+    is_healthy = db_status == "connected" and available_count > 0
 
     return {
         "status": "ok" if is_healthy else "degraded",
         "database": db_status,
         "service": "crack-ai",
         "response_time_ms": elapsed_ms,
+        "llm_pool": {
+            "total_models": len(pool_status),
+            "available_models": available_count,
+            "base_url": settings.llm_base_url,
+            "models": pool_status,
+        },
     }
 
 @app.post(

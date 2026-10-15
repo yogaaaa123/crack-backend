@@ -19,6 +19,7 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from config import settings
+from model_rotation import rotation
 from tools import execute_tool as _execute_tool
 from logging_config import get_logger
 
@@ -409,6 +410,63 @@ async def execute_tool_call(
         logger.error(f"[Tool Error] {tool_name}: {e}", request_id=request_id)
         return {"error": "An internal error occurred while fetching data."}
 
+async def _create_completion_with_rotation(
+    messages: list[dict],
+    request_id: str,
+):
+    """
+    Call the LLM with model rotation & automatic failover.
+
+    OpenRouter free models have tight per-model rate limits (~20 req/min).
+    On 429 or error, the failing model is cooled down and we retry with
+    the next available one (up to llm_max_attempts models).
+    """
+    last_error: Exception | None = None
+
+    for attempt in range(settings.llm_max_attempts):
+        model_id = await rotation.acquire()
+
+        extra_kwargs: dict[str, Any] = {}
+        if "deepseek" in model_id.lower():
+            extra_kwargs["extra_body"] = {"reasoning_effort": "low"}
+
+        try:
+            response = await client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                tools=_get_tools(),
+                tool_choice="auto",
+                temperature=0.0,
+                timeout=30.0,
+                **extra_kwargs,
+            )
+            await rotation.report_success(model_id)
+            if attempt > 0:
+                logger.info("LLM failover succeeded", model=model_id, attempt=attempt, request_id=request_id)
+            return response
+        except Exception as e:
+            last_error = e
+            status_code = getattr(e, "status_code", None)
+            if status_code == 429:
+                await rotation.report_rate_limit(model_id)
+            else:
+                await rotation.report_error(model_id, e)
+            logger.warning(
+                "LLM call failed, trying next model",
+                model=model_id,
+                status_code=status_code,
+                attempt=attempt + 1,
+                request_id=request_id,
+            )
+
+    logger.error(
+        "All LLM models exhausted",
+        attempts=settings.llm_max_attempts,
+        request_id=request_id,
+        error=str(last_error),
+    )
+    raise RuntimeError(f"All {settings.llm_max_attempts} LLM attempts failed: {last_error}")
+
 async def chat(
     message: str,
     history: list[dict],
@@ -462,18 +520,9 @@ async def chat(
 
     for iteration in range(max_tool_iterations):
 
-        extra_kwargs = {}
-        if "deepseek" in settings.llm_model.lower():
-            extra_kwargs["extra_body"] = {"reasoning_effort": "low"}
-
-        response = await client.chat.completions.create(
-            model=settings.llm_model,
+        response = await _create_completion_with_rotation(
             messages=messages,
-            tools=_get_tools(),
-            tool_choice="auto",
-            temperature=0.0,
-            timeout=30.0,
-            **extra_kwargs,
+            request_id=request_id,
         )
 
         choice = response.choices[0]
