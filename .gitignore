@@ -72,3 +72,8 @@ docs/local/
 .sisyphus/
 .playwright/
 .playwright-mcp/
+
+# Documentation — only README.md is tracked (others are local-only)
+*.md
+!README.md
+!**/README.md
