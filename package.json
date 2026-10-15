@@ -11,8 +11,8 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-"start:prod": "node dist/main",
-"start:migrate": "npx prisma migrate deploy && node dist/main",
+    "start:prod": "node dist/main",
+    "start:migrate": "npx prisma migrate deploy && node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -23,6 +23,8 @@
     "prepare": "prisma generate"
   },
   "dependencies": {
+    "@neon/config": "^1.9.1",
+    "@neon/env": "^1.6.2",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
