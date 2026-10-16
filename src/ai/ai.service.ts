@@ -19,6 +19,9 @@ interface ChatHistoryMessage {
   text?: string;
 }
 
+/** Konteks percakapan yang diteruskan ke service AI (20 pasang tanya-jawab). */
+const MAX_HISTORY_MESSAGES = 40;
+
 export interface AiChatResponse {
   reply: string;
   toolsUsed: string[];
@@ -63,15 +66,20 @@ export class AiService {
     }
 
     const url = `${this.aiBaseUrl}/chat`;
-    const transformedHistory = (history || []).map((msg: ChatHistoryMessage) => {
-      if (msg.parts) {
-        return msg;
-      }
-      return {
-        role: msg.role,
-        parts: [msg.content || msg.text || ''],
-      };
-    });
+    const transformedHistory = (history || [])
+      .map((msg: ChatHistoryMessage) => {
+        // Frontend lama mengirim role 'model'; service AI hanya menerima
+        // 'user'/'assistant', jadi normalisasi di sini.
+        const role = msg.role === 'model' ? 'assistant' : msg.role;
+        if (msg.parts) {
+          return { ...msg, role };
+        }
+        return {
+          role,
+          parts: [msg.content || msg.text || ''],
+        };
+      })
+      .slice(-MAX_HISTORY_MESSAGES);
 
     this.logger.log(`Proxying chat to AI service [user=${user?.username || 'unknown'}]: ${url}`);
 

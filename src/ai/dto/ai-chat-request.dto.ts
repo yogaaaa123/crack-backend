@@ -51,12 +51,12 @@ export class AiChatRequestDto {
 
   @ApiPropertyOptional({
     type: [AiChatHistoryMessage],
-    description: 'Optional chat history (max 20 messages) for maintaining conversation context',
+    description: 'Optional chat history (max 40 messages) for maintaining conversation context',
   })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AiChatHistoryMessage)
-  @ArrayMaxSize(20, { message: 'History too long (max 20 messages)' })
+  @ArrayMaxSize(40, { message: 'History too long (max 40 messages)' })
   @IsOptional()
   history?: AiChatHistoryMessage[];
 }

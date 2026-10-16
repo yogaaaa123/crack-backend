@@ -507,8 +507,13 @@ async def chat(
 
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    for msg in history:
+    # Batasi konteks ke 40 pesan terakhir agar percakapan panjang tetap jalan
+    # tanpa membengkakkan prompt.
+    for msg in history[-40:]:
         role_name = msg.get("role", "user")
+        # "model" adalah alias lama dari "assistant"
+        if role_name == "model":
+            role_name = "assistant"
         parts_text = "".join(
             p.get("text", p) if isinstance(p, dict) else p
             for p in msg.get("parts", [])
