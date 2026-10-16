@@ -22,6 +22,13 @@ interface ChatHistoryMessage {
 /** Konteks percakapan yang diteruskan ke service AI (20 pasang tanya-jawab). */
 const MAX_HISTORY_MESSAGES = 40;
 
+/**
+ * Render free instances tidur setelah idle dan butuh ~40 detik untuk bangun,
+ * jadi timeout-nya longgar dan request diulang sekali kalau koneksi gagal.
+ */
+const AI_REQUEST_TIMEOUT_MS = 90_000;
+const AI_COLD_START_RETRY_DELAY_MS = 5_000;
+
 export interface AiChatResponse {
   reply: string;
   toolsUsed: string[];
@@ -84,19 +91,17 @@ export class AiService {
     this.logger.log(`Proxying chat to AI service [user=${user?.username || 'unknown'}]: ${url}`);
 
     try {
-      const response = await firstValueFrom(
-        this.httpService.post<AiChatResponse>(
-          url,
-          { message, history: transformedHistory },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Internal-API-Key': this.internalApiKey,
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: 30000,
+      const response = await this.postWithColdStartRetry<AiChatResponse>(
+        url,
+        { message, history: transformedHistory },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-API-Key': this.internalApiKey,
+            Authorization: `Bearer ${token}`,
           },
-        ),
+          timeout: AI_REQUEST_TIMEOUT_MS,
+        },
       );
 
       return response.data;
@@ -151,5 +156,50 @@ export class AiService {
         message: 'AI service is unavailable or encountered an unexpected error',
       });
     }
+  }
+
+  /**
+   * POST ke service AI dengan toleransi cold start.
+   *
+   * Instance free di Render tidur saat idle; request pertama bisa gagal
+   * (connection reset / timeout / 502 / 503). Percobaan pertama tetap membangunkan
+   * instance, jadi sekali ulang setelah jeda singkat biasanya sudah berhasil.
+   */
+  private async postWithColdStartRetry<T>(
+    url: string,
+    data: unknown,
+    config: { headers: Record<string, string>; timeout: number },
+  ) {
+    try {
+      return await firstValueFrom(this.httpService.post<T>(url, data, config));
+    } catch (error: unknown) {
+      if (!this.looksLikeColdStart(error)) {
+        throw error;
+      }
+      this.logger.warn(
+        `AI service looks asleep (${(error as AxiosError).code || 'no response'}) — waking it and retrying once`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, AI_COLD_START_RETRY_DELAY_MS));
+      return firstValueFrom(this.httpService.post<T>(url, data, config));
+    }
+  }
+
+  private looksLikeColdStart(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('isAxiosError' in error)) {
+      return false;
+    }
+    const axiosError = error as AxiosError;
+    if (!axiosError.isAxiosError) {
+      return false;
+    }
+    const status = axiosError.response?.status;
+    return (
+      !axiosError.response ||
+      status === HttpStatus.BAD_GATEWAY ||
+      status === HttpStatus.SERVICE_UNAVAILABLE ||
+      axiosError.code === 'ECONNABORTED' ||
+      axiosError.code === 'ECONNRESET' ||
+      axiosError.code === 'ETIMEDOUT'
+    );
   }
 }

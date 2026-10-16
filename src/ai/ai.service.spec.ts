@@ -173,6 +173,70 @@ describe('AiService', () => {
       );
     });
 
+    it('retries once when the AI service looks asleep (cold start)', async () => {
+      jest.useFakeTimers();
+      try {
+        const coldStartError: AxiosError = {
+          isAxiosError: true,
+          message: 'socket hang up',
+          name: 'AxiosError',
+          code: 'ECONNRESET',
+          config: {} as any,
+          toJSON: () => ({}),
+        };
+        const mockResponse: AxiosResponse = {
+          data: { reply: 'AI response after wake', toolsUsed: [] },
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: {} as any,
+        };
+
+        mockPrismaService.tenant.findUnique.mockResolvedValue({
+          aiTokens: 1000,
+          aiTokensUsed: 100,
+        });
+        mockHttpService.post
+          .mockReturnValueOnce(throwError(() => coldStartError))
+          .mockReturnValueOnce(of(mockResponse));
+
+        const pending = service.chat('Hello', [], 'token123', mockUser);
+        await jest.advanceTimersByTimeAsync(5000);
+        const result = await pending;
+
+        expect(result.reply).toBe('AI response after wake');
+        expect(mockHttpService.post).toHaveBeenCalledTimes(2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('does not retry when the AI service returns a real error', async () => {
+      const axiosError: AxiosError = {
+        isAxiosError: true,
+        message: 'Bad Request',
+        name: 'AxiosError',
+        config: {} as any,
+        response: {
+          status: 400,
+          data: { detail: 'invalid tool call' },
+          statusText: 'Bad Request',
+          headers: {},
+          config: {} as any,
+        },
+        toJSON: () => ({}),
+      };
+
+      mockPrismaService.tenant.findUnique.mockResolvedValue({
+        aiTokens: 1000,
+        aiTokensUsed: 100,
+      });
+      mockHttpService.post.mockReturnValue(throwError(() => axiosError));
+
+      await expect(service.chat('Hello', [], 'token123', mockUser)).rejects.toThrow(HttpException);
+      expect(mockHttpService.post).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle AI service HTTP errors', async () => {
       const axiosError: AxiosError = {
         isAxiosError: true,

@@ -8,7 +8,7 @@ import { PrismaModule } from '../prisma.module';
 @Module({
   imports: [
     HttpModule.register({
-      timeout: 60000,
+      timeout: 90000,
       maxRedirects: 0,
     }),
     AuthModule,

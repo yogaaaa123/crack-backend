@@ -1,0 +1,52 @@
+name: Keep-alive
+
+# Render free-tier services spin down after ~15 minutes without traffic.
+# This job pings the health endpoints so they stay warm.
+#
+# FREE-TIER BUDGET: Render gives 750 instance-hours/month per workspace.
+# Two services running 24/7 would need ~1460 hours and get suspended, so the
+# pings only run inside a 12-hour window (08:00-20:00 Asia/Jakarta):
+#   12 h/day x 30.4 days x 2 services ~= 730 instance-hours/month.
+# Change WINDOW_START/WINDOW_END below if you want a different window, or
+# upgrade both services to a paid instance type for true 24/7.
+
+on:
+  schedule:
+    # every 10 minutes (Render sleeps at 15)
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    env:
+      WINDOW_START: '08:00'
+      WINDOW_END: '20:00'
+      BACKEND_HEALTH_URL: https://crack-backend-0okp.onrender.com/health
+      AI_HEALTH_URL: https://crack-ai-b1qh.onrender.com/health
+    steps:
+      - name: Ping Render services if inside the keep-alive window
+        run: |
+          now=$(TZ=Asia/Jakarta date +%H:%M)
+          echo "Waktu WIB sekarang: $now (window $WINDOW_START-$WINDOW_END)"
+          if [[ "$now" < "$WINDOW_START" || "$now" >= "$WINDOW_END" ]]; then
+            echo "::notice::Di luar window keep-alive, service dibiarkan tidur (hemat instance-hours)."
+            exit 0
+          fi
+
+          ping() {
+            local name="$1" url="$2"
+            for attempt in 1 2 3; do
+              code=$(curl -s -o /dev/null -m 90 -w "%{http_code}" "$url" || echo 000)
+              echo "$name ($url) -> HTTP $code (percobaan $attempt)"
+              if [ "$code" = "200" ]; then return 0; fi
+              sleep 15
+            done
+            echo "::warning::$name tidak merespons 200 setelah 3 percobaan"
+            return 0
+          }
+
+          # Jalankan berurutan supaya cold start service pertama tidak
+          # menabrak timeout service kedua.
+          ping "backend" "$BACKEND_HEALTH_URL"
+          ping "crack-ai" "$AI_HEALTH_URL"
