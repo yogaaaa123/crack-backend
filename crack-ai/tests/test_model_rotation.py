@@ -162,7 +162,7 @@ class TestParseModelList:
 
     def test_empty_string_falls_back_to_default_pool(self):
         defaults = parse_model_list("")
-        assert len(defaults) >= 10
+        assert len(defaults) >= 5
         assert all(m.endswith(":free") for m in defaults)
 
     def test_whitespace_only_falls_back_to_default_pool(self):

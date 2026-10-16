@@ -127,21 +127,24 @@ class ModelRotation:
 
 
 def _default_free_models() -> list[str]:
-    """Free tool-capable models, best-first (largest context / strongest tool use on top)."""
+    """Free tool-capable models, best-first, verified live 2026-10-16.
+
+    Removed after probing OpenRouter (kept out to avoid burning attempts):
+      - nvidia/nemotron-3-ultra-550b-a55b:free  -> request timeout
+      - thinkingmachines/inkling:free           -> 403 agentic-harness-only
+      - thinkingmachines/inkling-small:free     -> 403 agentic-harness-only
+      - poolside/laguna-s-2.1:free              -> 429 provider error
+      - poolside/laguna-xs-2.1:free             -> 429 provider error
+      - google/gemma-4-31b-it:free              -> 429 provider error
+      - google/gemma-4-26b-a4b-it:free          -> 429 provider error
+    """
     return [
         "nvidia/nemotron-3.5-lightning:free",
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "thinkingmachines/inkling:free",
-        "thinkingmachines/inkling-small:free",
-        "dots-studio/dots-3-note-preview:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "poolside/laguna-s-2.1:free",
-        "poolside/laguna-xs-2.1:free",
-        "google/gemma-4-31b-it:free",
-        "google/gemma-4-26b-a4b-it:free",
         "cohere/north-mini-code:free",
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "liquid/lfm-2.5-2.6b:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "dots-studio/dots-3-note-preview:free",
     ]
 
 
