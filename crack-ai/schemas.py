@@ -31,8 +31,8 @@ class ChatRequest(BaseModel):
     )
     history: list[ChatMessage] = Field(
         default=[],
-        max_length=40,
-        description="Previous chat history (optional, max 40 messages)",
+        max_length=100,
+        description="Previous chat history (optional, only the last 40 are used)",
     )
 
 class ChatResponse(BaseModel):
