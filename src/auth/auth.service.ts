@@ -35,10 +35,22 @@ export class AuthService {
   private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
   async googleLogin(dto: GoogleLoginDto) {
-    const ticket = await this.googleClient.verifyIdToken({
-      idToken: dto.idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      this.logger.error('GOOGLE_CLIENT_ID is not configured — Google login is disabled');
+      throw new UnauthorizedException('Google login is not configured');
+    }
+
+    let ticket;
+    try {
+      ticket = await this.googleClient.verifyIdToken({
+        idToken: dto.idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch {
+      // Expired, malformed or wrong-audience tokens must be a 401, not a 500.
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
     const payload = ticket.getPayload();
     if (!payload?.email) {
       throw new UnauthorizedException('Invalid Google token');

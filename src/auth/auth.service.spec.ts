@@ -346,6 +346,7 @@ describe('AuthService', () => {
     const dto = { idToken: 'valid-google-token' };
 
     beforeEach(() => {
+      process.env.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
       const googleClient = (service as any).googleClient;
       googleClient.verifyIdToken.mockReset();
       prisma.tenantMember.findMany.mockResolvedValue([]);
