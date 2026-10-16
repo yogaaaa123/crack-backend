@@ -14,4 +14,6 @@ COPY . .
 
 EXPOSE 8001
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Render (and most PaaS) injects $PORT — bind to it instead of hardcoded 8001.
+# Falls back to 8001 for local docker-compose runs.
+CMD ["sh", "-c", "uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001}"]
