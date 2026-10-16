@@ -59,6 +59,11 @@ export class AuthService {
       this.logger.log(`New platform user created: ${payload.email}`);
     }
 
+    const memberships = await this.prisma.tenantMember.findMany({
+      where: { platformUserId: platformUser.id },
+      include: { tenant: { select: { id: true, name: true } } },
+    });
+
     const accessToken = this.jwtService.sign(
       {
         sub: platformUser.id,
@@ -74,6 +79,76 @@ export class AuthService {
         id: platformUser.id,
         email: platformUser.email,
         name: platformUser.name,
+      },
+      needsStore: memberships.length === 0,
+      stores: memberships.map((m) => ({ id: m.tenant.id, name: m.tenant.name })),
+    };
+  }
+
+  /**
+   * Stores owned by the platform (Google) user — used by the store picker.
+   */
+  async listStores(platformUserId: string) {
+    const memberships = await this.prisma.tenantMember.findMany({
+      where: { platformUserId },
+      include: { tenant: { select: { id: true, name: true } } },
+    });
+    return memberships.map((m) => ({ id: m.tenant.id, name: m.tenant.name }));
+  }
+
+  /**
+   * Exchange a platform (Google) JWT for a tenant session of a store the
+   * platform user owns. Keeps the same Google account bound to its stores.
+   */
+  async selectStore(platformUserId: string, tenantId: string) {
+    const membership = await this.prisma.tenantMember.findUnique({
+      where: { platformUserId_tenantId: { platformUserId, tenantId } },
+    });
+    if (!membership) {
+      throw new ForbiddenException('You do not have access to this store');
+    }
+
+    const tenantUser = await this.prisma.tenantUser.findFirst({
+      where: { tenantId, role: 'ADMIN', deletedAt: null },
+    });
+    if (!tenantUser) {
+      throw new UnauthorizedException('No admin account is linked to this store');
+    }
+
+    const payload = {
+      username: tenantUser.username,
+      sub: tenantUser.id,
+      role: tenantUser.role,
+      tenantId: tenantUser.tenantId,
+    };
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRES,
+    });
+
+    const rawRefreshToken = crypto.randomBytes(40).toString('hex');
+    const hashedRefreshToken = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
+    const refreshExpiresAt = new Date();
+    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + this.REFRESH_TOKEN_EXPIRES_DAYS);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token: hashedRefreshToken,
+        userId: tenantUser.id,
+        expiresAt: refreshExpiresAt,
+      },
+    });
+
+    this.logger.log(`Platform user ${platformUserId} entered store ${tenantId}`);
+
+    return {
+      accessToken,
+      refreshToken: rawRefreshToken,
+      user: {
+        id: tenantUser.id,
+        username: tenantUser.username,
+        role: tenantUser.role,
+        tenantId: tenantUser.tenantId,
       },
     };
   }

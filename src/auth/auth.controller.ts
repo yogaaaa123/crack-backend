@@ -16,6 +16,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
+import { SelectStoreDto } from './dto/select-store.dto';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -125,8 +126,18 @@ Mendaftarkan toko baru secara otomatis dengan fitur:
   @ApiBody({ type: GoogleLoginDto })
   @ApiResponse({ status: 200, description: 'Google login successful' })
   @ApiResponse({ status: 401, description: 'Invalid Google token' })
-  async googleLogin(@Body() dto: GoogleLoginDto) {
-    return this.authService.googleLogin(dto);
+  async googleLogin(
+    @Body() dto: GoogleLoginDto,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.googleLogin(dto);
+    // Platform session cookie — lets /auth/create-store and /auth/platform/select-store
+    // work right after Google login without exposing the token to JS.
+    res.cookie('auth_token', result.accessToken, {
+      ...this.getCookieOptions(),
+      maxAge: 5 * 60 * 1000,
+    });
+    return result;
   }
 
   @Post('create-store')
@@ -155,6 +166,48 @@ Mendaftarkan toko baru secara otomatis dengan fitur:
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return { message: result.message, user: result.user };
+  }
+
+  @Post('platform/select-store')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(PlatformJwtGuard)
+  @Throttle({ auth: { ttl: 60000, limit: 10 } })
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Enter an existing store after Google login',
+    description:
+      'Exchanges the platform JWT (from /auth/google) for a tenant session of a store the Google account owns.',
+  })
+  @ApiBody({ type: SelectStoreDto })
+  @ApiResponse({ status: 200, description: 'Tenant session created' })
+  @ApiResponse({ status: 403, description: 'Platform user does not own this store' })
+  async selectStore(
+    @Body() dto: SelectStoreDto,
+    @CurrentUser('id') platformUserId: string,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.selectStore(platformUserId, dto.tenantId);
+    const cookieOpts = this.getCookieOptions();
+    res.cookie('auth_token', result.accessToken, { ...cookieOpts, maxAge: 15 * 60 * 1000 });
+    res.cookie('refresh_token', result.refreshToken, {
+      ...cookieOpts,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    return { user: result.user };
+  }
+
+  @Get('platform/stores')
+  @UseGuards(PlatformJwtGuard)
+  @Throttle({ auth: { ttl: 60000, limit: 20 } })
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List stores owned by the Google account',
+    description: 'Requires the platform JWT cookie/header from /auth/google.',
+  })
+  @ApiResponse({ status: 200, description: 'Stores owned by the platform user' })
+  async listStores(@CurrentUser('id') platformUserId: string) {
+    const stores = await this.authService.listStores(platformUserId);
+    return { stores, needsStore: stores.length === 0 };
   }
 
   @Public()

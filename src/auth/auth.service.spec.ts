@@ -56,6 +56,8 @@ const mockPrismaService = () => ({
   },
   tenantMember: {
     create: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
   },
   $transaction: jest.fn(),
 });
@@ -346,6 +348,42 @@ describe('AuthService', () => {
     beforeEach(() => {
       const googleClient = (service as any).googleClient;
       googleClient.verifyIdToken.mockReset();
+      prisma.tenantMember.findMany.mockResolvedValue([]);
+    });
+
+    it('should flag needsStore for a Google account without stores', async () => {
+      const googleClient = (service as any).googleClient;
+      googleClient.verifyIdToken.mockResolvedValue({
+        getPayload: () => ({ email: 'fresh@example.com', name: 'Fresh', sub: 'google-sub-789' }),
+      });
+      prisma.platformUser.findUnique.mockResolvedValue({
+        id: 'platform-uuid-3',
+        email: 'fresh@example.com',
+        name: 'Fresh',
+      });
+
+      const result = await service.googleLogin(dto);
+      expect(result.needsStore).toBe(true);
+      expect(result.stores).toEqual([]);
+    });
+
+    it('should list existing stores so the same Google account resumes them', async () => {
+      const googleClient = (service as any).googleClient;
+      googleClient.verifyIdToken.mockResolvedValue({
+        getPayload: () => ({ email: 'owner@example.com', name: 'Owner', sub: 'google-sub-999' }),
+      });
+      prisma.platformUser.findUnique.mockResolvedValue({
+        id: 'platform-uuid-4',
+        email: 'owner@example.com',
+        name: 'Owner',
+      });
+      prisma.tenantMember.findMany.mockResolvedValue([
+        { id: 'member-1', tenant: { id: 'tenant-1', name: 'Toko Satu' } },
+      ]);
+
+      const result = await service.googleLogin(dto);
+      expect(result.needsStore).toBe(false);
+      expect(result.stores).toEqual([{ id: 'tenant-1', name: 'Toko Satu' }]);
     });
 
     it('should create a new platform user and return accessToken', async () => {
@@ -397,6 +435,39 @@ describe('AuthService', () => {
       googleClient.verifyIdToken.mockRejectedValue(new Error('Invalid token'));
 
       await expect(service.googleLogin(dto)).rejects.toThrow(Error);
+    });
+  });
+
+  describe('selectStore', () => {
+    it('should issue tenant tokens for a store the platform user owns', async () => {
+      prisma.tenantMember.findUnique.mockResolvedValue({ id: 'member-1', role: 'OWNER' });
+      prisma.tenantUser.findFirst.mockResolvedValue(
+        createMockUser({ id: 'tenant-user-1', username: 'admin1', tenantId: 'tenant-1' }),
+      );
+      prisma.refreshToken.create.mockResolvedValue({ id: 'rt-1' });
+
+      const result = await service.selectStore('platform-1', 'tenant-1');
+
+      expect(result.accessToken).toBe('mock.jwt.token');
+      expect(result.user).toMatchObject({ username: 'admin1', tenantId: 'tenant-1' });
+      expect(prisma.refreshToken.create).toHaveBeenCalled();
+    });
+
+    it('should reject stores the platform user does not belong to', async () => {
+      prisma.tenantMember.findUnique.mockResolvedValue(null);
+
+      await expect(service.selectStore('platform-1', 'other-tenant')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should reject when the store has no admin account', async () => {
+      prisma.tenantMember.findUnique.mockResolvedValue({ id: 'member-1', role: 'OWNER' });
+      prisma.tenantUser.findFirst.mockResolvedValue(null);
+
+      await expect(service.selectStore('platform-1', 'tenant-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 
