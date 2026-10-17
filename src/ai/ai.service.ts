@@ -55,6 +55,9 @@ export class AiService {
     token: string,
     user?: AuthenticatedUser,
   ): Promise<AiChatResponse> {
+    let aiTokensTotal = 0;
+    let aiTokensRemaining = 0;
+
     if (user && !user.isSuperAdmin) {
       const tenant = await this.prisma.tenant.findUnique({
         where: { id: user.tenantId },
@@ -70,7 +73,23 @@ export class AiService {
           HttpStatus.PAYMENT_REQUIRED,
         );
       }
+
+      aiTokensTotal = tenant.aiTokens;
+      aiTokensRemaining = tenant.aiTokens - tenant.aiTokensUsed;
     }
+
+    // Inject info kuota ke context supaya AI bisa menjawab pertanyaan
+    // "sisa token berapa" dan menjelaskan limit saat layanan bermasalah.
+    const quotaContext =
+      user && !user.isSuperAdmin
+        ? `\n\n[System info: kuota token AI toko ini sisa ${aiTokensRemaining} dari total ${aiTokensTotal}. `
+          + 'Jika user bertanya soal sisa token/kuota AI, jawab dengan angka sisa ini. '
+          + 'Jika user bertanya kenapa AI tidak bisa dipakai atau sedang error, jelaskan kemungkinan penyebabnya: '
+          + '(1) kuota token AI toko habis sehingga diblokir sistem, '
+          + '(2) provider model AI gratis (OpenRouter free tier) sedang limit rate atau sedang down sehingga permintaan gagal, '
+          + '(3) server AI free hosting sempat sleep sehingga butuh beberapa detik untuk bangun. '
+          + 'Jangan mengarang angka kuota selain yang diberikan di system info ini.]'
+        : '';
 
     const url = `${this.aiBaseUrl}/chat`;
     const transformedHistory = (history || [])
@@ -93,7 +112,7 @@ export class AiService {
     try {
       const response = await this.postWithColdStartRetry<AiChatResponse>(
         url,
-        { message, history: transformedHistory },
+        { message: `${message}${quotaContext}`, history: transformedHistory },
         {
           headers: {
             'Content-Type': 'application/json',
