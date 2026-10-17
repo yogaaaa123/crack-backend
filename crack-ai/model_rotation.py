@@ -137,8 +137,12 @@ def _default_free_models() -> list[str]:
       - poolside/laguna-xs-2.1:free             -> 429 provider error
       - google/gemma-4-31b-it:free              -> 429 provider error
       - google/gemma-4-26b-a4b-it:free          -> 429 provider error
+
+    poolside/laguna-s-2.1:free was re-added 2026-10-17 after probing healthy
+    (uptime 99.93% over 1d, tools supported). Re-probed live first.
     """
     return [
+        "poolside/laguna-s-2.1:free",
         "nvidia/nemotron-3.5-lightning:free",
         "cohere/north-mini-code:free",
         "liquid/lfm-2.5-2.6b:free",
